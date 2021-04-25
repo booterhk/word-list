@@ -10,9 +10,17 @@
       <a-menu-item key="app"> <a-icon type="appstore" />单词板</a-menu-item>
       <a-menu-item key="yesturday"> <a-icon type="mail" />昨天的单词</a-menu-item>
       <a-menu-item key="class">
-      <a-dropdown>
+        <a-popconfirm placement="topRight" ok-text="Yes" cancel-text="No" @confirm="confirm">
+          <template slot="班级">
+            <p>班级</p>
+          </template>
           <a class="ant-dropdown-link" @click="e => e.preventDefault()">
-             <a-icon type="mail" /> {{remember.value}} <a-icon type="down" />
+             <a-icon type="mail" /> 班级 <a-icon type="down" />
+          </a>
+        </a-popconfirm>
+      <!-- <a-dropdown>
+          <a class="ant-dropdown-link" @click="e => e.preventDefault()">
+             <a-icon type="mail" /> 班级 <a-icon type="down" />
           </a>
           <a-menu slot="overlay" @click="handleMenuClick">
             <a-menu-item key="1">
@@ -25,7 +33,8 @@
               <span>全部</span>
             </a-menu-item>
           </a-menu>
-        </a-dropdown></a-menu-item>
+        </a-dropdown> -->
+      </a-menu-item>
     </a-menu>
     <a-drawer
       width='360'
@@ -114,6 +123,7 @@ export default {
       day1.setTime(time);
       return day1.getFullYear()+"-" + (day1.getMonth()+1 > 9 ? day1.getMonth()+1 : '0' + (day1.getMonth()+1)) + "-" + day1.getDate();
     },
+    confirm() {},
     handleMenuClick({key }) {
       switch (key) {
         case 'all':
