@@ -10,36 +10,33 @@
       <a-menu-item key="app"> <a-icon type="appstore" />单词板</a-menu-item>
       <a-menu-item key="yesturday"> <a-icon type="mail" />昨天的单词</a-menu-item>
       <a-menu-item key="class">
-        <a-popconfirm placement="topRight" ok-text="Yes" cancel-text="No" @confirm="confirm">
-          <template slot="班级">
-            <p>班级</p>
-          </template>
+      <a-dropdown :trigger="['click']">
           <a class="ant-dropdown-link" @click="e => e.preventDefault()">
-             <a-icon type="mail" /> 班级 <a-icon type="down" />
+             <a-icon type="mail" /> {{currentClass ? currentClass : '班级'}} <a-icon type="down" />
           </a>
-        </a-popconfirm>
-      <!-- <a-dropdown>
-          <a class="ant-dropdown-link" @click="e => e.preventDefault()">
-             <a-icon type="mail" /> 班级 <a-icon type="down" />
-          </a>
-          <a-menu slot="overlay" @click="handleMenuClick">
-            <a-menu-item key="1">
-              <span>记住的</span>
+          <a-menu slot="overlay" @click="handleClassMenuClick">
+            <a-menu-item :key="item+','+index" v-for="(item,index) in classList">
+              <span style="">{{item}}</span>
             </a-menu-item>
-            <a-menu-item key="0">
-              <span>没记住</span>
-            </a-menu-item>
-            <a-menu-item key="all">
-              <span>全部</span>
+            <a-menu-item key='add'>
+              <a class="ant-dropdown-link" @click="classVisible = !classVisible">
+                <a-icon type="plus" /> 新增
+              </a>
             </a-menu-item>
           </a-menu>
-        </a-dropdown> -->
+        </a-dropdown>
       </a-menu-item>
     </a-menu>
+    <a-modal v-model="classVisible" title="新增班级" ok-text="确认" cancel-text="取消" @ok="onAddClass">
+      <a-input
+        placeholder="请输入班级名称"
+        v-model='classname'
+      />
+    </a-modal>
     <a-drawer
       width='360'
       placement="right"
-      :visible="drawerVisible"      
+      :visible="drawerVisible"
       :closable="false"
       @close="drawerChange"
     >
@@ -60,7 +57,6 @@
             </a-menu-item>
           </a-menu>
         </a-dropdown>
-        <!-- <span>选择日期</span> -->
         <a-date-picker v-model='date' :locale="locale" placeholder='请选择日期' style="float: right" @change="onDateChange" />
       </div>
       <a-list bordered :data-source="filterWords">
@@ -114,16 +110,43 @@ export default {
       remember: {key: '0', value: '没记住'},
       drawerVisible: false,
       words: [],
-      filterWords: []
+      filterWords: [],
+      // 班级
+      classVisible: false,
+      classname: '',
+      currentClass: '',
+      classList: []
     }
   },
   methods: {
     getDate(time) {
       var day1 = new Date();
       day1.setTime(time);
-      return day1.getFullYear()+"-" + (day1.getMonth()+1 > 9 ? day1.getMonth()+1 : '0' + (day1.getMonth()+1)) + "-" + day1.getDate();
+      return day1.getFullYear()+"-" + (day1.getMonth()+1 > 9 ? day1.getMonth()+1 : '0' + (day1.getMonth()+1)) + "-" + (day1.getDate() > 9 ? day1.getDate() : '0' + (day1.getDate()));
     },
-    confirm() {},
+    async onAddClass() {
+      if (!this.classList.find(item => item === this.classname)) {
+        this.classList.push(this.classname)
+        const {data = ''} = await axios.get(`${window.location.href}/word-list.json`);
+        this.wordList = {words:data, class: this.classname}
+        this.currentClass = this.classname
+        await localStorage.setItem(`${this.classname}-word-list`, JSON.stringify({words:data, class: this.classname}))
+        await localStorage.setItem('class', JSON.stringify(this.classList))
+        this.getWords()
+        this.classVisible = !this.classVisible
+      } else {
+        this.$message.error('当前班级已存在');
+      }
+    },
+    async handleClassMenuClick({key }) {
+      const [name, ] = key.split(',')
+      if (name !== 'add') {
+        this.currentClass = name
+        const wordList = await localStorage.getItem(`${name}-word-list`);
+        this.wordList = JSON.parse(wordList) 
+        this.words = this.getDateWords(this.getDate(new Date().getTime()-24*60*60*1000))
+      }
+    },
     handleMenuClick({key }) {
       switch (key) {
         case 'all':
@@ -132,11 +155,11 @@ export default {
           break;
         case '1':
           this.remember = {key: '1', value: '记住了'}
-          this.filterWords = this.words.filter(item => item.remember)
+          this.filterWords = this.words?.filter(item => item.remember)
           break;
         case '0':
           this.remember = {key: '0', value: '没记住'}
-          this.filterWords = this.words.filter(item => !item.remember)
+          this.filterWords = this.words?.filter(item => !item.remember)
           break;
         default:
           break;
@@ -157,65 +180,90 @@ export default {
       }
     },
     getDateWords(date) {
-      this.words = this.wordList.filter(item => {
+      this.words = this.wordList?.words?.filter(item => {
+      console.log('word getDateWords', item.first_read_time, date)
+
         return item.first_read_time === date
       })
       this.handleMenuClick({key: this.remember.key})
     },
     getWords() {
-      const index = parseInt(Math.random()*(this.wordList.length+1),10)
-      const {first_read_time} = this.wordList[index]
-      if (!first_read_time) {
-        this.word = this.wordList[index]
-        return {
-          word: this.word,
-          index
+      const log = this.wordList?.words.find(item => !item.first_read_time)
+      if (log) {
+        if (this.currentClass) {
+          const index = parseInt(Math.random()*(this.wordList?.words?.length+1),10)
+          const {first_read_time} = this.wordList?.words[index] || ''
+          if (!first_read_time && this.wordList?.words[index]) {
+            this.word = this.wordList?.words[index]
+            return {
+              word: this.word,
+              index
+            }
+          } else {
+            this.getWords()
+          }
+        } else {
+          this.$message.info('请先选择班级',1);
+          return {
+              word: '',
+            }
         }
       } else {
-        this.getWords()
+        this.$message.success('恭喜，已经完成单词记忆',1);
       }
+      
+      
     },
     async unkown() {
-      const {word, index} = this.getWords()
+      const {word = '', index} = this.getWords() || ''
       this.wordVisible = false
-      if (word.first_read_time) {
-        word.update_read_time = this.getDate(new Date().getTime())
-      } else {
-        word.first_read_time = this.getDate(new Date().getTime())
-        word.update_read_time = this.getDate(new Date().getTime())
+      if (word) {
+        if (word.first_read_time) {
+          word.update_read_time = this.getDate(new Date().getTime())
+        } else {
+          word.first_read_time = this.getDate(new Date().getTime())
+          word.update_read_time = this.getDate(new Date().getTime())
+        }
+        word.remember = false;
+        this.wordList.words[index] = word
+        await localStorage.setItem(`${this.classname}-word-list`, JSON.stringify({words:this.wordList.words, class: this.classname}))
       }
-      word.remember = false
-      this.wordList[index] = word
-      await localStorage.setItem('word-list', JSON.stringify(this.wordList))
     },
     async kown() {
-      const {word, index} = this.getWords()
+      const {word = '', index} = this.getWords() || ''
       this.wordVisible = false
-      if (word.first_read_time) {
-        word.update_read_time = this.getDate(new Date().getTime())
-      } else {
-        word.first_read_time = this.getDate(new Date().getTime())
-        word.update_read_time = this.getDate(new Date().getTime())
+      if (word) {
+        if (word?.first_read_time) {
+          word.update_read_time = this.getDate(new Date().getTime())
+        } else {
+          word.first_read_time = this.getDate(new Date().getTime())
+          word.update_read_time = this.getDate(new Date().getTime())
+        }
+        word.remember = true
+        this.wordList.words[index] = word
+        await localStorage.setItem(`${this.classname}-word-list`, JSON.stringify({words:this.wordList.words, class: this.classname}))
       }
-      word.remember = true
-      this.wordList[index] = word
-      await localStorage.setItem('word-list', JSON.stringify(this.wordList))
     }
   },
   async beforeCreate() {
       // localStorage.clear()
-    const wordList = await localStorage.getItem('word-list')
-    if (wordList) {
-      this.wordList = JSON.parse(wordList)
-    } else {
-      const {data = ''} = await axios.get(`${window.location.href}/word-list.json`);
-      this.wordList = data
-      await localStorage.setItem('word-list', JSON.stringify(data))
-    } 
-    // this.getDateWords('2021-04-15')
+    // const wordList = await localStorage.getItem('word-list');
+    const classList = await localStorage.getItem('class')
     this.date = moment().format(this.getDate(new Date().getTime()-24*60*60*1000))
-    this.words = this.getDateWords(this.getDate(new Date().getTime()-24*60*60*1000))
-    this.getWords()
+    if (classList) {
+      this.classList = JSON.parse(classList);
+      // if (wordList) {
+      //   this.wordList = JSON.parse(wordList)
+      // } else {
+        // const {data = ''} = await axios.get(`${window.location.href}/word-list.json`);
+        // this.wordList = data
+        // await localStorage.setItem('word-list', JSON.stringify(data))
+      // } 
+      // this.words = this.getDateWords(this.getDate(new Date().getTime()-24*60*60*1000))
+      // this.getWords()
+    } else {
+      this.classVisible = true
+    }
   }
 }
 </script>
